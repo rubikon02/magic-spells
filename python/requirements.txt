@@ -1,0 +1,7 @@
+numpy>=1.24
+pandas>=2.0
+scipy>=1.10
+scikit-learn>=1.3
+torch>=2.12         # CPU wheel: pip install torch --index-url https://download.pytorch.org/whl/cpu
+onnxscript>=0.1     # required by torch.onnx.export in PyTorch >= 2.12
+onnxruntime>=1.16   # optional — only used for the post-export sanity check
