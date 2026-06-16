@@ -1,0 +1,42 @@
+{
+  "n_frames": 64,
+  "n_channels": 14,
+  "n_features": 896,
+  "feature_cols": [
+    "left_pos_x",
+    "left_pos_y",
+    "left_pos_z",
+    "left_rot_x",
+    "left_rot_y",
+    "left_rot_z",
+    "left_rot_w",
+    "right_pos_x",
+    "right_pos_y",
+    "right_pos_z",
+    "right_rot_x",
+    "right_rot_y",
+    "right_rot_z",
+    "right_rot_w"
+  ],
+  "left_pos_indices": [
+    0,
+    1,
+    2
+  ],
+  "right_pos_indices": [
+    7,
+    8,
+    9
+  ],
+  "onnx_input_name": "gesture_input",
+  "onnx_output_name": "probabilities",
+  "labels": {
+    "0": "lightning",
+    "1": "fireball",
+    "2": "wingardium_leviosa",
+    "3": "lumos",
+    "4": "open_door",
+    "5": "knock_off"
+  },
+  "preprocessing_note": "1. Collect gesture frames (length >= 4). 2. Linearly resample to 64 frames. 3. Subtract first-frame position: left hand channels [0,1,2], right hand [7,8,9]. 4. Feed directly to ONNX as a 3D tensor [1, 14, 64]. 5. Output float[6] probabilities; argmax -> spell index."
+}
