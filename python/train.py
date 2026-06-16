@@ -2,19 +2,17 @@
 Spell gesture recognition — 1-D Convolutional Neural Network (PyTorch).
 
 Architecture  : 3-block Conv1d encoder → Global-Avg-Pool → 2-FC head
-Input         : (batch, 896)  float32  [64 frames × 14 channels, flattened]
+Input         : (batch, 14, 64) float32 [14 channels × 64 frames]
 Output (ONNX) : (batch, 6)   float32  class probabilities (softmax applied)
 
 Preprocessing pipeline (mirror this in Unity C# for real-time inference):
-  1. Collect controller frames for the gesture (any length ≥ 4).
+  1. Collect controller frames for the gesture (any length >= 4).
   2. Linearly resample to exactly N_FRAMES = 64 frames.
   3. Subtract the first-frame position from every frame
        — left hand  : channels at indices [0, 1, 2]
        — right hand : channels at indices [7, 8, 9]
-  4. Flatten to a float[896] array (row-major).
-  5. Feed into the ONNX model — StandardScaler normalisation is
-     baked into the graph, no extra step needed.
-  6. Output is a float[6] probability vector; argmax → spell index.
+  4. Feed into the ONNX model as a 3D tensor [1, 14, 64].
+  5. Output is a float[6] probability vector; argmax → spell index.
 
 Label mapping (also saved in models/labels.json):
   0 lightning · 1 fireball · 2 wingardium_leviosa
@@ -134,39 +132,18 @@ def load_dataset():
 # ─── model ────────────────────────────────────────────────────────────────────
 
 class SpellCNN(nn.Module):
-    """
-    1-D Convolutional Neural Network for spell gesture recognition.
-
-    The StandardScaler statistics are registered as fixed buffers so the
-    exported ONNX graph is fully self-contained — Unity does not need to
-    perform any separate normalisation step.
-
-    Input  : (batch, 896)        — flat feature vector
-    Output : (batch, n_classes)  — raw logits (softmax added for ONNX export)
-    """
-
-    def __init__(self, n_classes: int, scaler_mean: np.ndarray, scaler_std: np.ndarray):
+    def __init__(self, n_classes: int):
         super().__init__()
-        self.register_buffer("scaler_mean", torch.tensor(scaler_mean, dtype=torch.float32))
-        self.register_buffer("scaler_std",  torch.tensor(scaler_std,  dtype=torch.float32))
-
-        # 3-block 1-D convolutional encoder
         self.encoder = nn.Sequential(
-            # block 1  (B, 14, 64) → (B, 32, 32)
             nn.Conv1d(N_CHANNELS, 32, kernel_size=5, padding=2),
-            nn.BatchNorm1d(32),
             nn.ReLU(inplace=True),
             nn.MaxPool1d(2),
 
-            # block 2  → (B, 64, 16)
             nn.Conv1d(32, 64, kernel_size=3, padding=1),
-            nn.BatchNorm1d(64),
             nn.ReLU(inplace=True),
             nn.MaxPool1d(2),
 
-            # block 3  → (B, 128, 1)
             nn.Conv1d(64, 128, kernel_size=3, padding=1),
-            nn.BatchNorm1d(128),
             nn.ReLU(inplace=True),
             nn.AdaptiveAvgPool1d(1),
         )
@@ -181,13 +158,10 @@ class SpellCNN(nn.Module):
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = (x - self.scaler_mean) / (self.scaler_std + 1e-7)
-        x = x.view(x.size(0), N_CHANNELS, N_FRAMES)
         return self.classifier(self.encoder(x))
 
 
 class _ExportWrapper(nn.Module):
-    """Wraps SpellCNN with softmax so the ONNX model outputs probabilities."""
     def __init__(self, model: SpellCNN):
         super().__init__()
         self.model = model
@@ -203,10 +177,8 @@ def _make_loader(X: np.ndarray, y: np.ndarray, shuffle: bool) -> DataLoader:
     return DataLoader(ds, batch_size=BATCH, shuffle=shuffle)
 
 
-def _build_model(n_classes: int, scaler: StandardScaler) -> SpellCNN:
-    mean = scaler.mean_.astype(np.float32)
-    std  = np.sqrt(scaler.var_).astype(np.float32)
-    return SpellCNN(n_classes, mean, std).to(DEVICE)
+def _build_model(n_classes: int) -> SpellCNN:
+    return SpellCNN(n_classes).to(DEVICE)
 
 
 def train_one_model(
@@ -215,10 +187,9 @@ def train_one_model(
     X_val: np.ndarray,
     y_val: np.ndarray,
     n_classes: int,
-    scaler: StandardScaler,
     verbose: bool = False,
 ) -> SpellCNN:
-    model = _build_model(n_classes, scaler)
+    model = _build_model(n_classes)
     opt   = torch.optim.Adam(model.parameters(), lr=LR, weight_decay=WEIGHT_DECAY)
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=EPOCHS)
     crit  = nn.CrossEntropyLoss()
@@ -234,7 +205,8 @@ def train_one_model(
         model.train()
         for xb, yb in tr_loader:
             opt.zero_grad()
-            crit(model(xb.to(DEVICE)), yb.to(DEVICE)).backward()
+            xb_reshaped = xb.to(DEVICE).view(-1, N_CHANNELS, N_FRAMES)
+            crit(model(xb_reshaped), yb.to(DEVICE)).backward()
             opt.step()
         sched.step()
 
@@ -242,7 +214,8 @@ def train_one_model(
         val_loss = 0.0
         with torch.no_grad():
             for xb, yb in val_loader:
-                val_loss += crit(model(xb.to(DEVICE)), yb.to(DEVICE)).item() * len(xb)
+                xb_reshaped = xb.to(DEVICE).view(-1, N_CHANNELS, N_FRAMES)
+                val_loss += crit(model(xb_reshaped), yb.to(DEVICE)).item() * len(xb)
         val_loss /= len(X_val)
 
         if val_loss < best_val_loss - 1e-5:
@@ -263,7 +236,8 @@ def train_one_model(
 @torch.no_grad()
 def predict(model: SpellCNN, X: np.ndarray):
     model.eval()
-    logits = model(torch.tensor(X).to(DEVICE))
+    x_tensor = torch.tensor(X).to(DEVICE).view(-1, N_CHANNELS, N_FRAMES)
+    logits = model(x_tensor)
     proba  = F.softmax(logits, dim=1).cpu().numpy()
     return np.argmax(proba, axis=1), proba
 
@@ -329,9 +303,7 @@ def main():
         X_tr, X_val = X[tr_idx], X[val_idx]
         y_tr, y_val = y[tr_idx], y[val_idx]
 
-        scaler = StandardScaler().fit(X_tr)
-
-        model = train_one_model(X_tr, y_tr, X_val, y_val, n_classes, scaler)
+        model = train_one_model(X_tr, y_tr, X_val, y_val, n_classes)
         preds, proba = predict(model, X_val)
 
         acc = accuracy_score(y_val, preds)
@@ -352,11 +324,9 @@ def main():
     cv_metrics = all_metrics(all_true, all_pred, all_proba, n_classes)
     print_metrics(cv_metrics, title="Aggregate CV metrics (all held-out predictions combined):")
 
-    # per-class report on aggregated CV predictions
     print("\nPer-class report — cross-validation:\n")
     print(classification_report(all_true, all_pred, target_names=spell_names, digits=4))
 
-    # confusion matrix
     cm = confusion_matrix(all_true, all_pred)
     col_w = max(len(n) for n in spell_names) + 2
     print("Confusion matrix  (rows = true class, columns = predicted class):\n")
@@ -369,8 +339,7 @@ def main():
     print(" Training final model on full dataset …")
     print(sep)
 
-    final_scaler = StandardScaler().fit(X)
-    final_model  = train_one_model(X, y, X, y, n_classes, final_scaler, verbose=True)
+    final_model = train_one_model(X, y, X, y, n_classes, verbose=True)
 
     train_preds, train_proba = predict(final_model, X)
     train_metrics = all_metrics(y, train_preds, train_proba, n_classes)
@@ -385,17 +354,20 @@ def main():
     print("Exporting to ONNX …")
     final_model.eval()
     export_model = _ExportWrapper(final_model).eval()
-    dummy_input  = torch.zeros(1, N_FEATURES)
+    
+    dummy_input = torch.zeros(1, N_CHANNELS, N_FRAMES, dtype=torch.float32)
 
     onnx_path = MODELS_DIR / "spell_classifier.onnx"
+    
     torch.onnx.export(
         export_model,
         dummy_input,
         str(onnx_path),
         input_names=["gesture_input"],
         output_names=["probabilities"],
-        dynamic_axes={"gesture_input": {0: "batch"}, "probabilities": {0: "batch"}},
-        opset_version=18,
+        opset_version=9,
+        do_constant_folding=True,
+        export_params=True
     )
     print(f"Saved ONNX model       →  {onnx_path}")
 
@@ -403,9 +375,11 @@ def main():
     try:
         import onnxruntime as ort
         sess  = ort.InferenceSession(str(onnx_path), providers=["CPUExecutionProvider"])
-        out   = sess.run(None, {"gesture_input": X[:5]})[0]
-        onnx_preds = np.argmax(out, axis=1)
-        print(f"ONNX check (5 samples): predicted={onnx_preds.tolist()}  expected={y[:5].tolist()}")
+        # Ponieważ model ma stały Batch Size = 1, testujemy tylko jedną próbkę
+        X_reshaped = X[0:1].reshape(1, N_CHANNELS, N_FRAMES)
+        out   = sess.run(None, {"gesture_input": X_reshaped})[0]
+        onnx_pred = np.argmax(out, axis=1)[0]
+        print(f"ONNX check (1 sample): predicted={onnx_pred}  expected={y[0]}")
     except ImportError:
         print("(onnxruntime not installed — skipping ONNX inference check)")
 
@@ -429,9 +403,8 @@ def main():
             "1. Collect gesture frames (length >= 4). "
             "2. Linearly resample to 64 frames. "
             "3. Subtract first-frame position: left hand channels [0,1,2], right hand [7,8,9]. "
-            "4. Flatten row-major to float[896]. "
-            "5. Feed directly to ONNX — scaler is baked in. "
-            "6. Output float[6] probabilities; argmax -> spell index."
+            "4. Feed directly to ONNX as a 3D tensor [1, 14, 64]. "
+            "5. Output float[6] probabilities; argmax -> spell index."
         ),
     }
     config_path = MODELS_DIR / "feature_config.json"
