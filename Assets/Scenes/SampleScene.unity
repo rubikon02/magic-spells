@@ -300,16 +300,22 @@ MonoBehaviour:
   beam: {fileID: 1588989484}
   beamLight: {fileID: 274434849}
   lumosSpellIndex: 3
-  duration: 0.5
+  duration: 3
   localBeamDirection: {x: 0, y: 0, z: 1}
   maxBeamLength: 10
   hitMask:
     serializedVersion: 2
-    m_Bits: 0
-  beamWidth: 0.04
+    m_Bits: 4294967295
+  beamWidth: 0.2
+  fadeInDuration: 0.25
+  fadeOutDuration: 0.5
+  flickerAmount: 0.5
+  flickerSpeed: 10
+  textureScrollSpeed: -2
   impactGlow: {fileID: 1678761450}
   impactPulseSpeed: 12
-  impactPulseAmount: 0.359
+  impactPulseAmount: 0.256
+  originGlow: {fileID: 0}
 --- !u!4 &1588989483 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 6247016435285752531, guid: a334aba136c1b5e4ea221eb64b091cdf, type: 3}
