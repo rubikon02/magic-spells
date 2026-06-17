@@ -23,8 +23,8 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  serializedVersion: 2
   m_GameObject: {fileID: 1000000000000000001}
+  serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
@@ -47,10 +47,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   spellRecognizer: {fileID: 0}
   launchOrigin: {fileID: 1000000000000000005}
-  fireballPrefab: {fileID: 2386159082878823987, guid: 2362f9aec9184e1408fb5a9ce224113d, type: 3}
+  fireballPrefab: {fileID: 2972392977303283589, guid: 11c9a5d587e034e43a68d4ebfb901206, type: 3}
   fireballSpellIndex: 1
   minConfidence: 0
   spawnOffset: 0.15
+  fireballScale: 0.35
   localLaunchDirection: {x: 0, y: 0, z: 1}
   speed: 8
   lifetime: 3
@@ -82,8 +83,8 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  serializedVersion: 2
   m_GameObject: {fileID: 1000000000000000004}
+  serializedVersion: 2
   m_LocalRotation: {x: -0.43029624, y: -0.028508304, z: -0.013597761, w: 0.902135}
   m_LocalPosition: {x: -0.003420353, y: 0.2108438, z: 0.15961957}
   m_LocalScale: {x: 1, y: 1, z: 1}

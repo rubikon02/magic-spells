@@ -26,6 +26,9 @@ namespace Spells
         [Tooltip("Odstep od czubka rozdzki, zeby efekt nie startowal wewnatrz modelu.")]
         [SerializeField] private float spawnOffset = 0.15f;
 
+        [Tooltip("Skala wystrzeliwanego efektu fireballa.")]
+        [SerializeField] private float fireballScale = 0.1f;
+
         [Header("Projectile")]
         [Tooltip("Lokalny kierunek lotu wzgledem launchOrigin.")]
         [SerializeField] private Vector3 localLaunchDirection = Vector3.forward;
@@ -102,6 +105,7 @@ namespace Spells
 
             var fireball = Instantiate(fireballPrefab, position, rotation);
             fireball.name = "Fireball";
+            fireball.transform.localScale *= fireballScale;
 
             PlayParticles(fireball, true);
             StartCoroutine(MoveFireball(fireball, direction));
