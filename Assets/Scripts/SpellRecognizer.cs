@@ -38,6 +38,8 @@ public class SpellRecognizer : MonoBehaviour
     private const int NFrames = 64;
     private const int NChannels = 14;
 
+    public event System.Action<string, int, float> OnSpellRecognized;
+
     private void Awake()
     {
         _runtimeModel = ModelLoader.Load(modelAsset);
@@ -162,6 +164,8 @@ public class SpellRecognizer : MonoBehaviour
 
         Debug.Log($"[SpellRecognizer] {spellName} ({confidence:F1}%)");
         SetLabel($"{spellName}\n{confidence:F0}%");
+
+        OnSpellRecognized?.Invoke(spellName, spellIdx, confidence);
     }
 
     private void SetLabel(string text)
