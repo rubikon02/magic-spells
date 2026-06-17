@@ -122,11 +122,6 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
---- !u!108 &274434849 stripped
-Light:
-  m_CorrespondingSourceObject: {fileID: 8522203439178680166, guid: a334aba136c1b5e4ea221eb64b091cdf, type: 3}
-  m_PrefabInstance: {fileID: 3199925221592915240}
-  m_PrefabAsset: {fileID: 0}
 --- !u!1 &705507993
 GameObject:
   m_ObjectHideFlags: 0
@@ -278,59 +273,6 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: ba124179af6a3a7469f127358241673d, type: 3}
---- !u!1 &1433003103 stripped
-GameObject:
-  m_CorrespondingSourceObject: {fileID: 7746326354386500395, guid: a334aba136c1b5e4ea221eb64b091cdf, type: 3}
-  m_PrefabInstance: {fileID: 3199925221592915240}
-  m_PrefabAsset: {fileID: 0}
---- !u!114 &1433003111
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1433003103}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 45b042a253db60c4a8b71944354b14d2, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  spellRecognizer: {fileID: 0}
-  beamOrigin: {fileID: 1588989483}
-  beam: {fileID: 1588989484}
-  beamLight: {fileID: 274434849}
-  lumosSpellIndex: 3
-  duration: 3
-  localBeamDirection: {x: 0, y: 0, z: 1}
-  maxBeamLength: 10
-  hitMask:
-    serializedVersion: 2
-    m_Bits: 4294967295
-  beamWidth: 0.2
-  fadeInDuration: 0.25
-  fadeOutDuration: 0.5
-  flickerAmount: 0.5
-  flickerSpeed: 10
-  textureScrollSpeed: -2
-  impactGlow: {fileID: 1678761450}
-  impactPulseSpeed: 12
-  impactPulseAmount: 0.256
-  originGlow: {fileID: 0}
---- !u!4 &1588989483 stripped
-Transform:
-  m_CorrespondingSourceObject: {fileID: 6247016435285752531, guid: a334aba136c1b5e4ea221eb64b091cdf, type: 3}
-  m_PrefabInstance: {fileID: 3199925221592915240}
-  m_PrefabAsset: {fileID: 0}
---- !u!120 &1588989484 stripped
-LineRenderer:
-  m_CorrespondingSourceObject: {fileID: 2646796320055911448, guid: a334aba136c1b5e4ea221eb64b091cdf, type: 3}
-  m_PrefabInstance: {fileID: 3199925221592915240}
-  m_PrefabAsset: {fileID: 0}
---- !u!4 &1678761450 stripped
-Transform:
-  m_CorrespondingSourceObject: {fileID: 2823070304740579181, guid: a334aba136c1b5e4ea221eb64b091cdf, type: 3}
-  m_PrefabInstance: {fileID: 3199925221592915240}
-  m_PrefabAsset: {fileID: 0}
 --- !u!1001 &3199925221592915240
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -381,31 +323,12 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 7746326354386500395, guid: a334aba136c1b5e4ea221eb64b091cdf, type: 3}
       propertyPath: m_Name
-      value: OVRCameraRig
-      objectReference: {fileID: 0}
-    - target: {fileID: 8522203439178680166, guid: a334aba136c1b5e4ea221eb64b091cdf, type: 3}
-      propertyPath: m_Color.b
-      value: 0.9254902
-      objectReference: {fileID: 0}
-    - target: {fileID: 8522203439178680166, guid: a334aba136c1b5e4ea221eb64b091cdf, type: 3}
-      propertyPath: m_Color.g
-      value: 0.8234555
-      objectReference: {fileID: 0}
-    - target: {fileID: 8522203439178680166, guid: a334aba136c1b5e4ea221eb64b091cdf, type: 3}
-      propertyPath: m_Color.r
-      value: 0.20784311
-      objectReference: {fileID: 0}
-    - target: {fileID: 8522203439178680166, guid: a334aba136c1b5e4ea221eb64b091cdf, type: 3}
-      propertyPath: m_Enabled
-      value: 1
+      value: Camera Rig
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents:
-    - targetCorrespondingSourceObject: {fileID: 7746326354386500395, guid: a334aba136c1b5e4ea221eb64b091cdf, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 1433003111}
+    m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: a334aba136c1b5e4ea221eb64b091cdf, type: 3}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
