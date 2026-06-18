@@ -108,7 +108,7 @@ GameObject:
   - component: {fileID: 6439458457612331006}
   - component: {fileID: 6934099087568977566}
   - component: {fileID: 174191776818392091}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: Text - Spell recorder
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -305,7 +305,7 @@ GameObject:
   - component: {fileID: 1165871719782812138}
   - component: {fileID: 748907349662222646}
   - component: {fileID: 2455812458590276250}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: Text - Spell visualizer
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -441,7 +441,7 @@ GameObject:
   - component: {fileID: 5752214377178214341}
   - component: {fileID: 8338229311087880803}
   - component: {fileID: 8128698621447943278}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: Text - Detected spell
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -639,7 +639,7 @@ GameObject:
   - component: {fileID: 4153109080987155617}
   - component: {fileID: 6980075575207472313}
   - component: {fileID: 4784943557092765961}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: UI Canvas
   m_TagString: Untagged
   m_Icon: {fileID: 0}
