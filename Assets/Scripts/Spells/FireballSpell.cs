@@ -30,7 +30,7 @@ namespace Spells
         [SerializeField] private float fireballScale = 0.1f;
 
         [Tooltip("Czas wzrostu fireballa do pelnej skali.")]
-        [SerializeField, Min(0f)] private float growthDuration = 1f;
+        [SerializeField, Min(0f)] private float growthDuration = 0.3f;
 
         [Header("Projectile")]
         [Tooltip("Lokalny kierunek lotu wzgledem launchOrigin.")]
@@ -116,9 +116,9 @@ namespace Spells
             var fireball = Instantiate(fireballPrefab, position, rotation);
             fireball.name = "Fireball";
             var targetScale = fireball.transform.localScale * fireballScale;
-            fireball.transform.localScale = Vector3.zero;
+            fireball.transform.localScale = targetScale * 0.1f;
 
-            PlayParticles(fireball, true);
+            PlayParticles(fireball, true, 0.5f);
             StartCoroutine(GrowFireball(fireball, targetScale));
             StartCoroutine(MoveFireball(fireball, direction));
 
@@ -137,13 +137,14 @@ namespace Spells
                 yield break;
             }
 
+            var startScale = targetScale * 0.1f;
             var elapsed = 0f;
             while (fireball && elapsed < growthDuration)
             {
                 elapsed += Time.deltaTime;
                 var progress = Mathf.Clamp01(elapsed / growthDuration);
                 progress = Mathf.SmoothStep(0f, 1f, progress);
-                fireball.transform.localScale = Vector3.LerpUnclamped(Vector3.zero, targetScale, progress);
+                fireball.transform.localScale = Vector3.LerpUnclamped(startScale, targetScale, progress);
                 yield return null;
             }
 
@@ -225,12 +226,16 @@ namespace Spells
             // Destroy(impact, impactLifetime);
         }
 
-        private static void PlayParticles(GameObject target, bool play)
+        private static void PlayParticles(GameObject target, bool play, float fastForwardTime = 0f)
         {
             foreach (var particle in target.GetComponentsInChildren<ParticleSystem>())
             {
                 if (play)
                 {
+                    if (fastForwardTime > 0f)
+                    {
+                        particle.Simulate(fastForwardTime, true, true);
+                    }
                     particle.Play(true);
                 }
                 else

@@ -51,7 +51,7 @@ MonoBehaviour:
   fireballSpellIndex: 1
   minConfidence: 0
   spawnOffset: 0.15
-  fireballScale: 0.1
+  fireballScale: 0.3
   growthDuration: 1
   localLaunchDirection: {x: 0, y: 0, z: 1}
   speed: 8
