@@ -23,6 +23,7 @@ import json
 import warnings
 from pathlib import Path
 
+from scipy.spatial.transform import Rotation as R
 import numpy as np
 import pandas as pd
 from scipy.interpolate import interp1d
@@ -93,11 +94,35 @@ def _resample(seq: np.ndarray, n: int) -> np.ndarray:
     return out
 
 
-def extract_features(seq: np.ndarray) -> np.ndarray:
-    """(T, 14) → (896,)  with translation normalisation."""
+def extract_features(seq: np.ndarray, lid: int) -> np.ndarray:
+    """(T, 14) → (896,)  with full transform normalisation."""
     seq = _resample(seq, N_FRAMES)
-    seq[:, LEFT_POS_IDX]  -= seq[0, LEFT_POS_IDX]
-    seq[:, RIGHT_POS_IDX] -= seq[0, RIGHT_POS_IDX]
+    
+    # Reference: Right hand at frame 0
+    pos0 = seq[0, RIGHT_POS_IDX].copy()
+    # Scipy expects [x, y, z, w], which matches our CSV order
+    rot0 = R.from_quat(seq[0, 10:14])
+    inv_rot0 = rot0.inv()
+
+    for t in range(N_FRAMES):
+        # Right hand position
+        seq[t, RIGHT_POS_IDX] = inv_rot0.apply(seq[t, RIGHT_POS_IDX] - pos0)
+        # Right hand rotation
+        r_r = R.from_quat(seq[t, 10:14])
+        r_norm = inv_rot0 * r_r
+
+        seq[t, 10:14] = r_norm.as_quat()
+
+        # Left hand
+        if lid == 4: # 5_open_door
+            seq[t, LEFT_POS_IDX] = inv_rot0.apply(seq[t, LEFT_POS_IDX] - pos0)
+            r_l = R.from_quat(seq[t, 3:7])
+            seq[t, 3:7] = (inv_rot0 * r_l).as_quat()
+        else:
+            # Zero out left hand for other spells
+            seq[t, LEFT_POS_IDX] = 0
+            seq[t, 3:7] = [0, 0, 0, 1] # Identity
+            
     return seq.flatten()
 
 
@@ -105,21 +130,39 @@ def load_dataset():
     X, y = [], []
     label_map: dict[int, str] = {}
 
+    # 1. Zbierz aktywne foldery i zlicz pliki CSV w każdym z nich
+    active_spells = []
+    csv_counts = []
+    
     for spell_dir in sorted(DATA_DIR.iterdir()):
         if not spell_dir.is_dir():
             continue
         idx_str, *parts = spell_dir.name.split("_")
         lid = int(idx_str) - 1
-        label_map[lid] = "_".join(parts)
+        
+        # EXPLICITLY SKIPPING THE 6TH SPELL (knock_off) FOR TRAINING AS REQUESTED
+#         if lid == 5: # 6_knock_off
+#             continue
 
         files = sorted(spell_dir.glob("*.csv"))
+        active_spells.append((spell_dir, lid, parts, files))
+        csv_counts.append(len(files))
+
+    # Wyznacz najmniejszą liczbę plików wśród wszystkich aktywnych spelli
+    min_csv_count = min(csv_counts) if csv_counts else 0
+    print(f"Balancing dataset: using the first {min_csv_count} CSV files per spell.")
+
+    # 2. Wczytaj dokładnie po min_csv_count próbek dla każdego spella
+    for spell_dir, lid, parts, files in active_spells:
+        label_map[lid] = "_".join(parts)
+        files_to_load = files[:min_csv_count]
         loaded = 0
-        for p in files:
+        for p in files_to_load:
             try:
                 seq = _load_csv(p)
                 if len(seq) < 4:
                     continue
-                X.append(extract_features(seq))
+                X.append(extract_features(seq, lid))
                 y.append(lid)
                 loaded += 1
             except Exception as exc:
@@ -205,7 +248,8 @@ def train_one_model(
         model.train()
         for xb, yb in tr_loader:
             opt.zero_grad()
-            xb_reshaped = xb.to(DEVICE).view(-1, N_CHANNELS, N_FRAMES)
+            # Correct reshape: (batch, 896) -> (batch, 64, 14) -> (batch, 14, 64)
+            xb_reshaped = xb.to(DEVICE).view(-1, N_FRAMES, N_CHANNELS).permute(0, 2, 1)
             crit(model(xb_reshaped), yb.to(DEVICE)).backward()
             opt.step()
         sched.step()
@@ -214,7 +258,7 @@ def train_one_model(
         val_loss = 0.0
         with torch.no_grad():
             for xb, yb in val_loader:
-                xb_reshaped = xb.to(DEVICE).view(-1, N_CHANNELS, N_FRAMES)
+                xb_reshaped = xb.to(DEVICE).view(-1, N_FRAMES, N_CHANNELS).permute(0, 2, 1)
                 val_loss += crit(model(xb_reshaped), yb.to(DEVICE)).item() * len(xb)
         val_loss /= len(X_val)
 
@@ -236,7 +280,7 @@ def train_one_model(
 @torch.no_grad()
 def predict(model: SpellCNN, X: np.ndarray):
     model.eval()
-    x_tensor = torch.tensor(X).to(DEVICE).view(-1, N_CHANNELS, N_FRAMES)
+    x_tensor = torch.tensor(X).to(DEVICE).view(-1, N_FRAMES, N_CHANNELS).permute(0, 2, 1)
     logits = model(x_tensor)
     proba  = F.softmax(logits, dim=1).cpu().numpy()
     return np.argmax(proba, axis=1), proba
@@ -375,8 +419,8 @@ def main():
     try:
         import onnxruntime as ort
         sess  = ort.InferenceSession(str(onnx_path), providers=["CPUExecutionProvider"])
-        # Ponieważ model ma stały Batch Size = 1, testujemy tylko jedną próbkę
-        X_reshaped = X[0:1].reshape(1, N_CHANNELS, N_FRAMES)
+        # (1, 896) -> (1, 64, 14) -> (1, 14, 64)
+        X_reshaped = X[0:1].reshape(1, N_FRAMES, N_CHANNELS).transpose(0, 2, 1)
         out   = sess.run(None, {"gesture_input": X_reshaped})[0]
         onnx_pred = np.argmax(out, axis=1)[0]
         print(f"ONNX check (1 sample): predicted={onnx_pred}  expected={y[0]}")
