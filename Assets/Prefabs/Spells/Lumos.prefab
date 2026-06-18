@@ -316,7 +316,6 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 4938422152607251598}
-  - component: {fileID: 7103531389460197394}
   - component: {fileID: 8661542794319118448}
   m_Layer: 0
   m_Name: LumosImpact
@@ -340,14 +339,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 8030397764802958097}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!33 &7103531389460197394
-MeshFilter:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 9044043417195446474}
-  m_Mesh: {fileID: 10210, guid: 0000000000000000e000000000000000, type: 0}
 --- !u!23 &8661542794319118448
 MeshRenderer:
   m_ObjectHideFlags: 0
