@@ -51,7 +51,8 @@ MonoBehaviour:
   fireballSpellIndex: 1
   minConfidence: 0
   spawnOffset: 0.15
-  fireballScale: 0.35
+  fireballScale: 0.1
+  growthDuration: 1
   localLaunchDirection: {x: 0, y: 0, z: 1}
   speed: 8
   lifetime: 3
@@ -61,6 +62,8 @@ MonoBehaviour:
     m_Bits: 4294967295
   stopOnHit: 1
   impactLifetime: 1.25
+  impactPrefab: {fileID: 5557362394125619005, guid: 43ca6b4775bfb1e45b1bfcce5303970b, type: 3}
+  impactScale: {x: 0.2, y: 0.2, z: 0.02}
 --- !u!1 &1000000000000000004
 GameObject:
   m_ObjectHideFlags: 0
