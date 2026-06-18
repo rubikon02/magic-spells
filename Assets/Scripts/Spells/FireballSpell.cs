@@ -29,6 +29,9 @@ namespace Spells
         [Tooltip("Skala wystrzeliwanego efektu fireballa.")]
         [SerializeField] private float fireballScale = 0.1f;
 
+        [Tooltip("Czas wzrostu fireballa do pelnej skali.")]
+        [SerializeField, Min(0f)] private float growthDuration = 0.3f;
+
         [Header("Projectile")]
         [Tooltip("Lokalny kierunek lotu wzgledem launchOrigin.")]
         [SerializeField] private Vector3 localLaunchDirection = Vector3.forward;
@@ -51,6 +54,13 @@ namespace Spells
 
         [Tooltip("Jak dlugo efekt zostaje po trafieniu.")]
         [SerializeField] private float impactLifetime = 1.25f;
+        
+        [Tooltip("Efekt odpalany w miejscu uderzenia fireballa.")]
+        [SerializeField] private GameObject impactPrefab;
+
+
+        [Tooltip("Skala efektu uderzenia.")]
+        [SerializeField] private Vector3 impactScale = new Vector3(0.2f, 0.2f, 0.02f);
 
         private void Awake()
         {
@@ -105,12 +115,43 @@ namespace Spells
 
             var fireball = Instantiate(fireballPrefab, position, rotation);
             fireball.name = "Fireball";
-            fireball.transform.localScale *= fireballScale;
+            var targetScale = fireball.transform.localScale * fireballScale;
+            fireball.transform.localScale = targetScale * 0.1f;
 
-            PlayParticles(fireball, true);
+            PlayParticles(fireball, true, 0.5f);
+            StartCoroutine(GrowFireball(fireball, targetScale));
             StartCoroutine(MoveFireball(fireball, direction));
 
             Debug.Log("[Fireball] Wystrzelony z rozdzki");
+        }
+
+        private IEnumerator GrowFireball(GameObject fireball, Vector3 targetScale)
+        {
+            if (growthDuration <= 0f)
+            {
+                if (fireball)
+                {
+                    fireball.transform.localScale = targetScale;
+                }
+
+                yield break;
+            }
+
+            var startScale = targetScale * 0.1f;
+            var elapsed = 0f;
+            while (fireball && elapsed < growthDuration)
+            {
+                elapsed += Time.deltaTime;
+                var progress = Mathf.Clamp01(elapsed / growthDuration);
+                progress = Mathf.SmoothStep(0f, 1f, progress);
+                fireball.transform.localScale = Vector3.LerpUnclamped(startScale, targetScale, progress);
+                yield return null;
+            }
+
+            if (fireball)
+            {
+                fireball.transform.localScale = targetScale;
+            }
         }
 
         private Vector3 GetLaunchDirection()
@@ -136,7 +177,7 @@ namespace Spells
                 {
                     fireball.transform.position = hit.point;
                     fireball.transform.rotation = Quaternion.LookRotation(hit.normal);
-                    HandleHit(fireball);
+                    HandleHit(fireball, hit);
                     yield break;
                 }
 
@@ -153,8 +194,10 @@ namespace Spells
             }
         }
 
-        private void HandleHit(GameObject fireball)
+        private void HandleHit(GameObject fireball, RaycastHit hit)
         {
+            SpawnImpact(hit.point, hit.normal);
+
             if (!stopOnHit)
             {
                 Destroy(fireball);
@@ -165,12 +208,34 @@ namespace Spells
             Destroy(fireball, impactLifetime);
         }
 
-        private static void PlayParticles(GameObject target, bool play)
+        private void SpawnImpact(Vector3 position, Vector3 normal)
+        {
+            if (!impactPrefab)
+            {
+                return;
+            }
+
+            var rotation = normal.sqrMagnitude > 0.0001f
+                ? Quaternion.LookRotation(normal)
+                : Quaternion.identity;
+            var impact = Instantiate(impactPrefab, position, rotation);
+            impact.name = impactPrefab.name;
+            impact.transform.localScale = impactScale;
+
+            PlayParticles(impact, true);
+            // Destroy(impact, impactLifetime);
+        }
+
+        private static void PlayParticles(GameObject target, bool play, float fastForwardTime = 0f)
         {
             foreach (var particle in target.GetComponentsInChildren<ParticleSystem>())
             {
                 if (play)
                 {
+                    if (fastForwardTime > 0f)
+                    {
+                        particle.Simulate(fastForwardTime, true, true);
+                    }
                     particle.Play(true);
                 }
                 else
