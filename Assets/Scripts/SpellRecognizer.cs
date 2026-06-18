@@ -12,6 +12,7 @@ public class SpellRecognizer : MonoBehaviour
     [Header("Input")]
     [SerializeField] private XRNode inputNode = XRNode.RightHand;
     [SerializeField, Range(0.1f, 0.9f)] private float triggerThreshold = 0.5f;
+    [SerializeField] private bool flipInput = true;
 
     [Header("UI")]
     [SerializeField] private TextMeshProUGUI resultLabel;
@@ -96,26 +97,72 @@ public class SpellRecognizer : MonoBehaviour
         };
     }
 
-    private static float[] Preprocess(List<float[]> rawFrames)
+    private float[] Preprocess(List<float[]> rawFrames)
     {
         var resampled = Resample(rawFrames, NFrames);
 
-        var leftX0  = resampled[0];
-        var leftY0  = resampled[1];
-        var leftZ0  = resampled[2];
-        var rightX0 = resampled[7];
-        var rightY0 = resampled[8];
-        var rightZ0 = resampled[9];
+        // Reference: right hand position and rotation at frame 0
+        var rPos0 = new Vector3(resampled[7], resampled[8], resampled[9]);
+        var rRot0 = new Quaternion(resampled[10], resampled[11], resampled[12], resampled[13]);
+        if (rRot0.x == 0 && rRot0.y == 0 && rRot0.z == 0 && rRot0.w == 0) rRot0 = Quaternion.identity;
+        var invRot0 = Quaternion.Inverse(rRot0);
+
+        // Optional 180° X flip applied uniformly to right-hand rotation (controlled by flipInput flag)
+        var flip = flipInput ? Quaternion.Euler(180f, 0f, 0f) : Quaternion.identity;
+
+        var lPos0 = new Vector3(resampled[0], resampled[1], resampled[2]);
+        var maxLeftDistSq = 0f;
 
         for (var f = 0; f < NFrames; f++)
         {
             var idx = f * NChannels;
-            resampled[idx + 0] -= leftX0;
-            resampled[idx + 1] -= leftY0;
-            resampled[idx + 2] -= leftZ0;
-            resampled[idx + 7] -= rightX0;
-            resampled[idx + 8] -= rightY0;
-            resampled[idx + 9] -= rightZ0;
+
+            // Right hand position — translate to local space
+            var rp = new Vector3(resampled[idx + 7], resampled[idx + 8], resampled[idx + 9]);
+            var localRP = invRot0 * (rp - rPos0);
+            resampled[idx + 7] = localRP.x;
+            resampled[idx + 8] = localRP.y;
+            resampled[idx + 9] = localRP.z;
+
+            // Right hand rotation — normalize then optionally flip
+            var rr = new Quaternion(resampled[idx + 10], resampled[idx + 11], resampled[idx + 12], resampled[idx + 13]);
+            var localRR = flip * (invRot0 * rr);
+            resampled[idx + 10] = localRR.x;
+            resampled[idx + 11] = localRR.y;
+            resampled[idx + 12] = localRR.z;
+            resampled[idx + 13] = localRR.w;
+
+            // Left hand position — track max movement before zeroing
+            var lp = new Vector3(resampled[idx + 0], resampled[idx + 1], resampled[idx + 2]);
+            maxLeftDistSq = Mathf.Max(maxLeftDistSq, (lp - lPos0).sqrMagnitude);
+
+            var localLP = invRot0 * (lp - rPos0);
+            resampled[idx + 0] = localLP.x;
+            resampled[idx + 1] = localLP.y;
+            resampled[idx + 2] = localLP.z;
+
+            var lr = new Quaternion(resampled[idx + 3], resampled[idx + 4], resampled[idx + 5], resampled[idx + 6]);
+            var localLR = invRot0 * lr;
+            resampled[idx + 3] = localLR.x;
+            resampled[idx + 4] = localLR.y;
+            resampled[idx + 5] = localLR.z;
+            resampled[idx + 6] = localLR.w;
+        }
+
+        // If left hand barely moved, zero it out (right-hand-only gesture)
+        if (maxLeftDistSq < 0.15f * 0.15f)
+        {
+            for (var f = 0; f < NFrames; f++)
+            {
+                var idx = f * NChannels;
+                resampled[idx + 0] = 0f;
+                resampled[idx + 1] = 0f;
+                resampled[idx + 2] = 0f;
+                resampled[idx + 3] = 0f;
+                resampled[idx + 4] = 0f;
+                resampled[idx + 5] = 0f;
+                resampled[idx + 6] = 1f;
+            }
         }
 
         return resampled;
@@ -147,19 +194,24 @@ public class SpellRecognizer : MonoBehaviour
 
         using var inputTensor = new Tensor(1, 1, NFrames, NChannels, features);
         _worker.Execute(inputTensor);
-        
+
         var outputTensor = _worker.PeekOutput("probabilities");
         if (outputTensor == null) return;
 
         var probabilities = outputTensor.ToReadOnlyArray();
-        var spellIdx = 0;
 
-        for (var i = 0; i < Mathf.Min(probabilities.Length, SpellNames.Length); i++)
+        var spellIdx = 0;
+        var maxProb = 0f;
+        for (var i = 0; i < probabilities.Length; i++)
         {
-            if (probabilities[i] > probabilities[spellIdx]) spellIdx = i;
+            if (probabilities[i] > maxProb)
+            {
+                maxProb = probabilities[i];
+                spellIdx = i;
+            }
         }
 
-        var confidence = probabilities[spellIdx] * 100f;
+        var confidence = maxProb * 100f;
         var spellName = spellIdx < SpellNames.Length ? SpellNames[spellIdx] : $"Spell {spellIdx}";
 
         Debug.Log($"[SpellRecognizer] {spellName} ({confidence:F1}%)");
