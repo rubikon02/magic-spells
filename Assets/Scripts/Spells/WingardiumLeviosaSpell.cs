@@ -32,6 +32,13 @@ namespace Spells
         [Tooltip("Opcjonalny ma³y rozb³ysk w miejscu trafienia czaru.")]
         [SerializeField] private Transform impactGlow;
 
+        [Header("Script Rotation Override")]
+        [Tooltip("Czy skrypt ma automatycznie naprawiaæ k¹t strza³u w dó³ (jak w Lumos).")]
+        [SerializeField] private bool overrideRotationInScript = true;
+
+        [Tooltip("K¹t korekty rotacji ró¿d¿ki VR.")]
+        [SerializeField] private Vector3 customRotationOffset = new Vector3(-51f, -3.62f, 0f);
+
         private float _beamTimer;
         private bool _isBeamActive;
 
@@ -86,12 +93,33 @@ namespace Spells
             CastLevitation();
         }
 
+        // Pomocnicza metoda obliczaj¹ca skorygowany kierunek strza³u
+        private Vector3 GetCorrectedDirection()
+        {
+            if (overrideRotationInScript && beamOrigin.localRotation == Quaternion.identity)
+            {
+                // Jeœli WandTip ma czyst¹ rotacjê 0,0,0, sztucznie aplikujemy prawid³owy obrót ró¿d¿ki VR
+                Quaternion correctionQuaternion = Quaternion.Euler(customRotationOffset);
+
+                // Jeœli beamOrigin ma rodzica (RightHandAnchor), wyliczamy kierunek w oparciu o niego
+                if (beamOrigin.parent)
+                {
+                    return (beamOrigin.parent.rotation * correctionQuaternion) * Vector3.forward;
+                }
+
+                return correctionQuaternion * Vector3.forward;
+            }
+
+            // W przeciwnym wypadku u¿ywamy standardowej osi forward transformu
+            return beamOrigin.forward;
+        }
+
         private void CastLevitation()
         {
             if (!beamOrigin) return;
 
             Vector3 start = beamOrigin.position;
-            Vector3 dir = beamOrigin.forward;
+            Vector3 dir = GetCorrectedDirection(); // U¿ycie skorygowanego kierunku
             Vector3 end = start + dir * maxCastDistance;
 
             // Wypuszczamy promieñ magii w poszukiwaniu lewituj¹cego obiektu
@@ -146,7 +174,7 @@ namespace Spells
 
         private void Update()
         {
-            // TYMCZASOWY TEST: Usuñ test klawisza 'L' ze skryptu kranu, a tutaj u¿yj klawisza 'K' (lub dowolnego innego) do symulacji rzucenia czaru ró¿d¿k¹
+            // TYMCZASOWY TEST: U¿yj klawisza 'K' do symulacji rzucenia czaru ró¿d¿k¹
             if (Input.GetKeyDown(KeyCode.K))
             {
                 Debug.Log("[Wingardium Leviosa] Test klawiszowy - rzucenie czaru");
@@ -159,9 +187,10 @@ namespace Spells
             if (laserLineRenderer && beamOrigin)
             {
                 laserLineRenderer.SetPosition(0, beamOrigin.position);
-                // Pobieramy aktualn¹ liniê strza³u
+
+                // Pobieramy aktualn¹, skorygowan¹ liniê strza³u
                 Vector3 start = beamOrigin.position;
-                Vector3 dir = beamOrigin.forward;
+                Vector3 dir = GetCorrectedDirection(); // U¿ycie skorygowanego kierunku
                 Vector3 end = start + dir * maxCastDistance;
 
                 if (Physics.Raycast(start, dir, out var hit, maxCastDistance, hitMask, QueryTriggerInteraction.Ignore))
