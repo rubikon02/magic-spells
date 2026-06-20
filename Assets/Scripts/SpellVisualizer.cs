@@ -1,9 +1,11 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using UnityEngine;
 using UnityEngine.XR;
+using UnityEngine.Networking;
 using TMPro;
 
 public class SpellVisualizer : MonoBehaviour
@@ -38,7 +40,7 @@ public class SpellVisualizer : MonoBehaviour
     private bool _isVisualizing;
     private float _vizStartTime;
     private List<MotionFrame> _activeRecording;
-    private bool _firstShowClickDone;
+    private Coroutine _loadingCoroutine;
 
     private struct MotionFrame
     {
@@ -51,7 +53,11 @@ public class SpellVisualizer : MonoBehaviour
 
     private void Start()
     {
-        _firstShowClickDone = false;
+        if (statusLabel)
+        {
+            statusLabel.gameObject.SetActive(false);
+            statusLabel.text = "";
+        }
     }
 
     private void Update()
@@ -79,7 +85,7 @@ public class SpellVisualizer : MonoBehaviour
             _currentSpellIdx = (_currentSpellIdx + 1) % SpellNames.Length;
             if (_isVisualizing)
             {
-                StartVisualization(); // Restart immediate visualizer for new spell
+                TriggerStartVisualization();
             }
         }
         _prevCycleButton = cyclePressed;
@@ -88,45 +94,66 @@ public class SpellVisualizer : MonoBehaviour
         _inputDevice.TryGetFeatureValue(CommonUsages.secondaryButton, out bool togglePressed);
         if (togglePressed && !_prevShowButton)
         {
-            if (!_firstShowClickDone)
+            if (_isVisualizing || _loadingCoroutine != null)
             {
-                _firstShowClickDone = true;
-                StartVisualization();
+                StopVisualization();
             }
             else
             {
-                if (_isVisualizing)
-                {
-                    StopVisualization();
-                }
-                else
-                {
-                    StartVisualization();
-                }
+                TriggerStartVisualization();
             }
         }
         _prevShowButton = togglePressed;
     }
 
-    private void StartVisualization()
+    private void TriggerStartVisualization()
+    {
+        if (_loadingCoroutine != null) StopCoroutine(_loadingCoroutine);
+        _loadingCoroutine = StartCoroutine(StartVisualizationRoutine());
+    }
+
+    private IEnumerator StartVisualizationRoutine()
     {
         StopVisualization();
 
-        string path = Path.Combine(Application.streamingAssetsPath, "Recordings", RecordingFiles[_currentSpellIdx]);
-        if (!File.Exists(path))
+        if (statusLabel)
         {
-            Debug.LogError($"[SpellVisualizer] File not found: {path}");
-            if (statusLabel)
-            {
-                statusLabel.gameObject.SetActive(true);
-            }
-            return;
+            statusLabel.gameObject.SetActive(true);
+            statusLabel.text = "£adowanie czaru...";
         }
 
-        _activeRecording = LoadRecording(path);
-        if (_activeRecording.Count == 0) return;
+        string path = Path.Combine(Application.streamingAssetsPath, "Recordings", RecordingFiles[_currentSpellIdx]);
 
-        // Create container for Right Wand
+        // Zamiast File.ReadAllLines u¿ywamy UnityWebRequest dla Questa (Android)
+        using (UnityWebRequest www = UnityWebRequest.Get(path))
+        {
+            yield return www.SendWebRequest();
+
+            if (www.result != UnityWebRequest.Result.Success)
+            {
+                Debug.LogError($"[SpellVisualizer] B³¹d ³adowania pliku: {www.error} na œcie¿ce: {path}");
+                if (statusLabel)
+                {
+                    statusLabel.text = $"B³¹d: Brak pliku {RecordingFiles[_currentSpellIdx]}";
+                }
+                _loadingCoroutine = null;
+                yield break;
+            }
+
+            // Przetwarzamy pobran¹ zawartoœæ tekstow¹ pliku CSV
+            string fileContent = www.downloadHandler.text;
+            _activeRecording = ParseRecordingData(fileContent);
+        }
+
+        if (_activeRecording == null || _activeRecording.Count == 0)
+        {
+            Debug.LogError($"[SpellVisualizer] Plik jest pusty lub uszkodzony.");
+            if (statusLabel) statusLabel.text = "B³¹d: Pusty plik CSV";
+            _loadingCoroutine = null;
+            yield break;
+        }
+
+        // Tworzenie kontenera dla prawej ró¿d¿ki
         _visualWandRight = new GameObject("WandContainer_R");
         GameObject rWand = Instantiate(wandPrefab);
         rWand.transform.SetParent(_visualWandRight.transform, false);
@@ -141,15 +168,23 @@ public class SpellVisualizer : MonoBehaviour
 
         _isVisualizing = true;
         _vizStartTime = Time.time;
+
         if (statusLabel)
         {
-            statusLabel.gameObject.SetActive(true);
             statusLabel.text = $"Visualizing: {SpellNames[_currentSpellIdx]}";
         }
+
+        _loadingCoroutine = null;
     }
 
     private void StopVisualization()
     {
+        if (_loadingCoroutine != null)
+        {
+            StopCoroutine(_loadingCoroutine);
+            _loadingCoroutine = null;
+        }
+
         _isVisualizing = false;
         if (_visualWandRight) Destroy(_visualWandRight);
         if (_visualWandLeft) Destroy(_visualWandLeft);
@@ -162,6 +197,8 @@ public class SpellVisualizer : MonoBehaviour
 
     private void UpdateVisualization()
     {
+        if (_activeRecording == null || _activeRecording.Count == 0) return;
+
         float elapsed = Time.time - _vizStartTime;
         float totalDuration = _activeRecording[_activeRecording.Count - 1].Time - _activeRecording[0].Time;
 
@@ -171,15 +208,12 @@ public class SpellVisualizer : MonoBehaviour
             elapsed = 0;
         }
 
-        // Simple linear interpolation
         MotionFrame frame = SampleRecording(_activeRecording, elapsed);
 
-        // Position visualization relative to player camera or this object
         Transform refTransform = Camera.main ? Camera.main.transform : transform;
         Vector3 origin = refTransform.position + refTransform.forward * 1.5f + refTransform.up * -0.5f;
         Quaternion orientation = Quaternion.LookRotation(refTransform.forward, Vector3.up);
 
-        // Wand offset relative to hand/controller
         Vector3 offsetPos = Vector3.zero;
         Quaternion offsetRot = Quaternion.identity;
         if (visualisationOriginRotation)
@@ -205,16 +239,20 @@ public class SpellVisualizer : MonoBehaviour
         }
     }
 
-    private List<MotionFrame> LoadRecording(string path)
+    private List<MotionFrame> ParseRecordingData(string csvText)
     {
         var frames = new List<MotionFrame>();
-        var lines = File.ReadAllLines(path);
-        
-        // Skip header
+
+        // Dzielimy tekst na linie uwzglêdniaj¹c ró¿ne znaki koñca linii (\n lub \r\n)
+        var lines = csvText.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
+
         float startTime = -1;
 
+        // Pomijamy nag³ówek (i = 1)
         for (int i = 1; i < lines.Length; i++)
         {
+            if (string.IsNullOrWhiteSpace(lines[i])) continue;
+
             var parts = lines[i].Split(',');
             if (parts.Length < 16) continue;
 
@@ -229,17 +267,11 @@ public class SpellVisualizer : MonoBehaviour
                 RightPos = new Vector3(float.Parse(parts[9], CultureInfo.InvariantCulture), float.Parse(parts[10], CultureInfo.InvariantCulture), float.Parse(parts[11], CultureInfo.InvariantCulture)),
                 RightRot = new Quaternion(float.Parse(parts[12], CultureInfo.InvariantCulture), float.Parse(parts[13], CultureInfo.InvariantCulture), float.Parse(parts[14], CultureInfo.InvariantCulture), float.Parse(parts[15], CultureInfo.InvariantCulture))
             };
-            
-            // Normalize relative to first frame right hand to match the "shape" logic
-            if (i == 1)
-            {
-                // We'll store the raw but reshifted to local 0,0,0
-            }
-            
+
             frames.Add(frame);
         }
 
-        // Apply normalization relative to first frame right hand
+        // Normalizacja relatywna do pierwszej klatki prawej d³oni
         if (frames.Count > 0)
         {
             Vector3 p0 = frames[0].RightPos;
@@ -250,8 +282,7 @@ public class SpellVisualizer : MonoBehaviour
             for (int i = 0; i < frames.Count; i++)
             {
                 var f = frames[i];
-                
-                // Base normalization
+
                 f.RightPos = invR0 * (f.RightPos - p0);
                 f.RightRot = invR0 * f.RightRot;
                 f.LeftPos = invR0 * (f.LeftPos - p0);

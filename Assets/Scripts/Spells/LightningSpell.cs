@@ -118,7 +118,7 @@ namespace Spells
         private void Update()
         {
             // TYMCZASOWY TEST: Naciœnij klawisz L na klawiaturze, aby wywo³aæ piorun
-            if (Input.GetKeyDown(KeyCode.L))
+            if (Input.GetKeyDown(KeyCode.P))
             {
                 Debug.Log("Test lightning - nacisnieto klawisz L");
                 CastLightning();
