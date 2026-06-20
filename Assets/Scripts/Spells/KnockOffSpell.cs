@@ -111,10 +111,15 @@ namespace Spells
                 {
                     rb = hit.collider.GetComponentInParent<Rigidbody>();
                 }
-
-                // Jeœli obiekt ma fizykê i nie jest zablokowany (kinematic)
-                if (rb != null && !rb.isKinematic)
+                // Zast¹p powy¿szy blok tym pancernej wersj¹:
+                if (rb != null)
                 {
+                    // WYMUSZAMY ODBLOKOWANIE FIZYKI PRZED STR¥CENIEM:
+                    if (rb.isKinematic)
+                    {
+                        rb.isKinematic = false;
+                    }
+
                     // Obliczamy wektor si³y: kierunek czaru + lekka modyfikacja w górê
                     Vector3 forceVector = dir * hitForce + Vector3.up * upwardModifier;
 
@@ -125,8 +130,9 @@ namespace Spells
                 }
                 else
                 {
-                    Debug.Log($"[Knock Off] Trafiono w {hit.collider.gameObject.name}, ale obiekt nie ma fizyki Rigidbody lub jest statyczny.");
+                    Debug.Log($"[Knock Off] Trafiono w {hit.collider.gameObject.name}, ale obiekt nie ma komponentu Rigidbody.");
                 }
+
             }
 
             TriggerVisualBeam(start, end, didHit, hit.normal);
